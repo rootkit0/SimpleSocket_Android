@@ -2,6 +2,7 @@ package network.manning.msi.com;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.StrictMode;
 import android.util.Log;
 import android.view.View;
@@ -36,7 +37,7 @@ public class SimpleSocket extends Activity {
     private EditText port;
     private EditText socketInput;
     private TextView socketOutput;
-
+    private Handler handler;
     //private static final String SERVER_IP = "10.0.2.2";
 
     @Override
@@ -52,33 +53,53 @@ public class SimpleSocket extends Activity {
         this.socketOutput = (TextView) findViewById(R.id.socket_output);
         socketButton = (Button) findViewById(R.id.socket_button);
         socketOutput.setText("");
+        handler = new Handler();
 
+        /*
         StrictMode.setThreadPolicy(new StrictMode.ThreadPolicy.
                 Builder().permitNetwork().build());
+        */
 
         socketButton.setOnClickListener(new OnClickListener() {
-
             public void onClick(final View v) {
-                try {
-                    //InetAddress serverAddr = InetAddress.getByName(SERVER_IP);
-                    InetAddress serverAddr = InetAddress.getByName(ipAddress.getText().toString());
-                    String output = callSocket(serverAddr, port.getText().toString(), socketInput.getText().toString());
-                    socketOutput.append(output);
-                } catch (java.net.UnknownHostException e1) {
-                    e1.printStackTrace();
-                }
+                final Thread thread = new Thread() {
+                    public void run() {
+                        InetAddress serverAddr = null;
+                        try {
+                            serverAddr = InetAddress.getByName(ipAddress.getText().toString());
+                            String output = callSocket(serverAddr, port.getText().toString(), socketInput.getText().toString());
+                            SimpleSocket.this.handler.post(new updateUIThread(output));
+                        } catch (java.net.UnknownHostException e1) {
+                            e1.printStackTrace();
+                        }
+                    }
+                };
+                thread.start();
             }
         });
     }
 
-    private String callSocket(final InetAddress ad, final String port, final String socketData) {
+    class updateUIThread implements Runnable {
+        private String msg;
 
+        public updateUIThread(String str){
+            this.msg=str;
+        }
+
+        @Override
+        public void run() {
+            socketOutput.append(msg);
+        }
+    }
+
+    private String callSocket(final InetAddress ad, final String port, final String socketData) {
         Socket socket = null;
         BufferedWriter writer = null;
         BufferedReader reader = null;
         String output = null;
 
         try {
+            System.out.println("Trying to connect to " + ad);
             socket = new Socket(ad, Integer.parseInt(port));
             writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
             reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
@@ -96,7 +117,7 @@ public class SimpleSocket extends Activity {
         } finally {
             try {
                 if (writer!=null)
-                  writer.close();
+                    writer.close();
             } catch (IOException e) { // swallow
             }
             try {
@@ -106,7 +127,7 @@ public class SimpleSocket extends Activity {
             }
             try {
                 if (socket!=null)
-                   socket.close();
+                    socket.close();
             } catch (IOException e) { // swallow
             }
         }
